@@ -2,6 +2,12 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #define MAX_TOKENS 30
 #define MAX_TOKEN_LEN 100
 char tokens[MAX_TOKENS][MAX_TOKEN_LEN]; // kar stringi da bo cim bolj pregledna koda
@@ -148,20 +154,30 @@ int mysum();        // 8
 int mycalc();       // 9
 int mybasename();   // 10
 int mydirname();    // 11
+int mydirch();      // 12
+int mydirwd();      // 13
+int mydirmk();      // 14
+int mydirrm();      // 15
+int mydirls();      // 16
 
 BuiltinCmd builtins[] = {
-    { "help",       myhelp },    // 0
-    { "debug",      mydebug },   // 1
-    { "prompt",     myprompt },  // 2
-    { "status",     mystatus },  // 3
+    { "help",       myhelp },     // 0
+    { "debug",      mydebug },    // 1
+    { "prompt",     myprompt },   // 2
+    { "status",     mystatus },   // 3
     { "exit",       myexit},      // 4
-    { "print",      myprint},     // 5 ***
+    { "print",      myprint},     // 5 
     { "echo",       myecho},      // 6
     { "len",        mylen},       // 7
     { "sum",        mysum},       // 8
     { "calc",       mycalc},      // 9
-    { "basename",    mybasename},  // 10
-    { "dirname",     mydirname}   // 11
+    { "basename",   mybasename},  // 10
+    { "dirname",    mydirname},   // 11
+    { "dirch",      mydirch},     // 12 ***
+    { "dirwd",      mydirwd},     // 13
+    { "dirmk",      mydirmk},     // 14
+    { "dirrm",      mydirrm},     // 15
+    { "dirls",      mydirls}      // 16
 
 };
 
@@ -200,7 +216,7 @@ int myhelp() {  // 0
 int debug_level = 0; // global var sa si zaponi zadnji level
 int mydebug() { // 1
     // >debug level (0/1 arg)
-    if (tokenCount == 1) {printf("%d\n", debug_level); }
+    if (tokenCount == 1) {printf("%d\n", debug_level); fflush(stdout);}
     int level = -1;
     if(tokenCount >= 2) {
         level = atoi(tokens[1]);
@@ -212,17 +228,17 @@ int mydebug() { // 1
 int printDebug() {
     if(debug_level > 0) {
         // print input line 
-        printf("Input line: '%s'\n", vhod);        
+        printf("Input line: '%s'\n", vhod); fflush(stdout);     
 
         // print tokens
         for(int i = 0; i < tokenCount; i++){
-            printf("Token %d: '%s'\n", i, tokens[i]);
+            printf("Token %d: '%s'\n", i, tokens[i]);fflush(stdout);   
         }
         
         // //print redirections
         if(inRedirect) { printf("Input redirect: '%s'\n", redirects[0]);}
         if(outRedirect){ printf("Output redirect: '%s'\n", redirects[1]);}
-        if(bgRun)      { printf("Background: 1\n"); } 
+        if(bgRun)      { printf("Background: 1\n"); } fflush(stdout);   
 
         // builtin or external
         char* fg_bg = bgRun ? "background" : "foreground";
@@ -235,13 +251,14 @@ int printDebug() {
                 else           {printf("%s ",  ukaz_brez_redir[i]); }
             }
         }
+        fflush(stdout);   
     }
 }
 
 int myprompt() { // 2
     // >prompt name (0/1 arg)
     if(tokenCount == 1) {
-        printf("%s\n", promptName);
+        printf("%s\n", promptName);fflush(stdout);   
     } else if (tokenCount >= 2) {
         if(strlen(tokens[1]) <= 8) {
             strcpy(promptName, tokens[1]);
@@ -255,7 +272,7 @@ int myprompt() { // 2
 int mystatus() { // 3
     // izpise se izhodni status zadnjega izvedenega ukaza
     // >status (0 arg)
-    printf("%d\n", lastCmdExitStatus);
+    printf("%d\n", lastCmdExitStatus); fflush(stdout);   
     return lastCmdExitStatus; // izjemoma se ta ne steje za vracanje statusa
 }
 
@@ -271,17 +288,18 @@ int myexit(){ // 4
 
 int myprint(){ // 5
     for(int i = 1; i < tokenCount; i++){
-        if(i == tokenCount -1) { printf("%s", tokens[i]); }
+        if(i == tokenCount -1) { printf("%s", tokens[i]); }   
         else {printf("%s ", tokens[i]);}
-    }
+    }   fflush(stdout);   
     return 0;
 }
 
 int myecho(){ // 6
+    if(tokenCount == 1) {printf("\n");}
     for(int i = 1; i < tokenCount; i++){
         if(i == tokenCount -1) { printf("%s\n", tokens[i]); }
         else {printf("%s ", tokens[i]);}
-    }
+    }   fflush(stdout);   
     return 0;
 }
 
@@ -290,7 +308,7 @@ int mylen() {  // 7
     for(int i = 1; i < tokenCount; i++){
         vsota += strlen(tokens[i]);
     }
-    printf("%d\n", vsota);
+    printf("%d\n", vsota); fflush(stdout);   
     return 0;
 } 
 
@@ -304,6 +322,7 @@ int mysum(){  // 8
         vsota += atoi(tokens[i]);
     }
     printf("%d\n", vsota);
+    fflush(stdout);   
     return 0;
 } 
 
@@ -332,6 +351,7 @@ int mycalc(){  // 9
             return 1;
     }
     printf("%d\n", rez);
+    fflush(stdout);   
     return 0;
 } 
 int mybasename(){  // 10
@@ -360,13 +380,196 @@ int mydirname(){  // 11
         path[path_len] = '\0'; 
 
         printf("%s\n", path);
+        fflush(stdout);   
     } else {
         return 2;
+    }   
+    return 0;
+    
+} 
+
+int mydirch() {
+    char cwd[1024];
+    
+    if(debug_level >= 2) {
+        getcwd(cwd, sizeof(cwd));
+        printf("before: %s\n", cwd); 
+    }
+
+    if (tokenCount == 1) {
+        if (chdir("/") != 0) {
+            int err = errno;
+            perror("dirch");
+            fflush(stdout); 
+            return err;
+        
+        }
+        
+    } else {
+        char* path = tokens[1];
+        if (chdir(path) != 0) {
+            int err = errno;
+            perror("dirch");
+            fflush(stdout); 
+            return err;
+               
+        }
+    }
+
+    if(debug_level >= 2) {
+        getcwd(cwd, sizeof(cwd));
+        printf("after: %s\n", cwd); 
+    }
+
+    return 0;
+}
+
+int dirch_private(char* path){
+    if (chdir(path) != 0) {
+        int err = errno;
+        perror("dirch_private");
+        fflush(stdout); 
+        return err;
+        
+    }
+}
+
+int mydirwd() { // 13
+    char* mode;
+    if (tokenCount == 1) { mode = "base";}
+    else                 { mode = tokens[1]; }
+    
+    char cwd[1024];
+    if(!strcmp(mode, "base")) { //strcmp vrne 0 ce sta enaka
+        if (getcwd(cwd, sizeof(cwd)) != NULL) {
+            if(!strcmp(cwd, "/")) { //ce je root moras izpisat ta /
+                printf("/\n"); 
+            } else {
+                char* last_slash = strrchr(cwd, '/');
+                printf("%s\n", last_slash +1);
+            }
+            fflush(stdout);   
+            
+        } else {
+            int err = errno;
+            perror("getcwd() error");
+            fflush(stdout); 
+            return err;
+             
+        }
+
+    } else if(!strcmp(mode, "full")) {
+        if (getcwd(cwd, sizeof(cwd)) != NULL) {
+            printf("%s\n", cwd);
+            fflush(stdout);   
+        } else {
+            int err = errno;
+            perror("getcwd() error");
+            fflush(stdout); 
+            return err;
+              
+        }
+    }
+    return 0;
+        
+} 
+
+int mydirmk() { // 14
+    if(tokenCount != 2) {
+        printf("invalid command");
+        fflush(stdout); 
+        return 1;
+         
+    } else {
+        char* dirname = tokens[1];
+        if (mkdir(dirname, 0755) == 0) {
+            // kul
+        } else {
+            int err = errno;
+            perror("dirmk");
+            fflush(stdout); 
+            return err;
+              
+        }
+    }
+    return 0;
+}  
+
+int mydirrm() { // 15
+    if(tokenCount != 2) {
+        printf("invalid command");
+        fflush(stdout); 
+        return 1;
+         
+    } else {
+        char* dirname = tokens[1];
+        //printf("Trying to remove: '%s'\n", dirname); fflush(stdout);
+        if (rmdir(dirname) == 0) {
+            // kul
+        } else { 
+            int err = errno;
+            perror("dirrm");
+            fflush(stdout); 
+            return err;
+              
+        }
+    }
+    return 0;
+}  
+
+int mydirls() { // 16
+    char path[1024] = {"./"};
+    char cwd[1024];
+    
+
+    if(tokenCount >= 2) {
+        if(getcwd(cwd, sizeof(cwd)) == NULL){
+            perror("getcwd"); 
+            fflush(stdout); 
+            return errno;
+          
+        }
+        if(strcpy(path + 2, tokens[1]) == NULL) { perror("strcpy"); fflush(stdout);  return errno;   }
+        int succ = dirch_private(path);
+        if(succ != 0) {
+            return succ;
+        }
+    }
+
+    DIR *dir = opendir(".");
+    if (dir == NULL) {
+        perror("opendir");
+        fflush(stdout); 
+        return 1;
+    }
+
+    struct dirent *entry;
+    char *names[1024]; // max 1024 files
+    int count = 0;
+
+    while ((entry = readdir(dir)) != NULL && count < 1024) {
+        names[count++] = strdup(entry->d_name); // save entry name
+    }
+
+    // Print all names with 2 spaces between, except after last
+    for (int i = 0; i < count; i++) {
+        printf("%s", names[i]);
+        if (i != count - 1) printf("  ");
+        free(names[i]); // cleanup strdup
+    }
+    printf("\n");
+
+    closedir(dir);
+
+    // Go back to original directory
+    if (tokenCount >= 2) {
+        int s = dirch_private(cwd); // move back
+        if (s != 0) return s;
     }
 
     return 0;
     
-} 
+}  
 
 
 
@@ -407,5 +610,5 @@ int main() {
         stUkaza = 0; 
     }
 
-    return 0;
+    return lastCmdExitStatus;
 }
