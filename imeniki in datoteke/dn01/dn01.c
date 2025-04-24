@@ -5,13 +5,12 @@
 #include <unistd.h>
 #include <errno.h>
 #include <dirent.h>
-#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
 #define MAX_TOKENS 30
 #define MAX_TOKEN_LEN 100
-char tokens[MAX_TOKENS][MAX_TOKEN_LEN]; // kar stringi da bo cim bolj izi
+char tokens[MAX_TOKENS][MAX_TOKEN_LEN]; // kar stringi da bo cim bolj pregledna koda
 int tokenCount = 0;
 char vhod[300];
 char ukaz_brez_redir[MAX_TOKENS - 3][MAX_TOKEN_LEN];
@@ -160,15 +159,6 @@ int mydirwd();      // 13
 int mydirmk();      // 14
 int mydirrm();      // 15
 int mydirls();      // 16
-int myrename();     // 17
-int myunlink();     // 18
-int myremove();     // 19
-int mylinkhard();   // 20
-int mylinksoft();   // 21
-int mylinkread();   // 22
-int mylinklist();   // 23
-int mycpcat();      // 24
-
 
 BuiltinCmd builtins[] = {
     { "help",       myhelp },     // 0
@@ -187,15 +177,7 @@ BuiltinCmd builtins[] = {
     { "dirwd",      mydirwd},     // 13
     { "dirmk",      mydirmk},     // 14
     { "dirrm",      mydirrm},     // 15
-    { "dirls",      mydirls},     // 16
-    { "rename",     myrename},    // 17
-    { "unlink",     myunlink},    // 18
-    { "remove",     myremove},    // 19
-    { "linkhard",   mylinkhard},  // 20
-    { "linksoft",   mylinksoft},  // 21
-    { "linkread",   mylinkread},  // 22
-    { "linklist",   mylinklist},  // 23
-    { "cpcat",      mycpcat}      // 24
+    { "dirls",      mydirls}      // 16
 
 };
 
@@ -221,38 +203,15 @@ int execute_builtin(int index) {
 
 //////////////////////////////////////////////////////////////////////////
 // command functions
-int myhelp() {
+int myhelp() {  // 0
     printf("Available commands:\n");
-    printf("help         - Show this help\n");
-    printf("debug [lvl]  - Get/set debug level (0 or 1)\n");
-    printf("prompt [str] - Show or change the shell prompt (max 8 chars)\n");
-    printf("status       - Show the exit status of the last command\n");
-    printf("exit [code]  - Exit the shell with optional exit status\n");
-    printf("print ...    - Print arguments without newline\n");
-    printf("echo ...     - Print arguments with newline\n");
-    printf("len ...      - Print total length of all arguments\n");
-    printf("sum ...      - Sum all numeric arguments\n");
-    printf("calc a op b  - Perform a simple arithmetic operation (+ - * / %% )\n");
-    printf("basename path- Extract filename from path\n");
-    printf("dirname path - Extract directory from path\n");
-    printf("dirch [path] - Change current directory (default /)\n");
-    printf("dirwd [mode] - Show current directory ('base' or 'full')\n");
-    printf("dirmk dir    - Create a directory\n");
-    printf("dirrm dir    - Remove an empty directory\n");
-    printf("dirls [path] - List contents of a directory\n");
-    printf("rename old new - Rename a file or directory\n");
-    printf("unlink file  - Unlink a file\n");
-    printf("remove file  - Remove a file (alias for unlink)\n");
-    printf("linkhard src dest - Create a hard link\n");
-    printf("linksoft src dest - Create a symbolic link\n");
-    printf("linkread path - Read symlink target\n");
-    printf("linklist path - List symlink status\n");
-    printf("cpcat src dst - Copy contents of src to dst\n");
-
-    fflush(stdout);
+    printf("help - Show this help\n");
+    printf("debug [level] - Set the debug level (0 or 1)\n");
+    printf("prompt [name] - Change the prompt\n");
+    printf("status - Show the exit status of the last command\n");
+    printf("exit [status] - Exit the shell with an optional exit status\n");
     return 0;
 }
-
 
 int debug_level = 0; // global var sa si zaponi zadnji level
 int mydebug() { // 1
@@ -395,7 +354,6 @@ int mycalc(){  // 9
     fflush(stdout);   
     return 0;
 } 
-
 int mybasename(){  // 10
     if(tokenCount != 2) {
         return 1;
@@ -442,7 +400,7 @@ int mydirch() {
         if (chdir("/") != 0) {
             int err = errno;
             perror("dirch");
-            fflush(stderr); 
+            fflush(stdout); 
             return err;
         
         }
@@ -452,7 +410,7 @@ int mydirch() {
         if (chdir(path) != 0) {
             int err = errno;
             perror("dirch");
-            fflush(stderr); 
+            fflush(stdout); 
             return err;
                
         }
@@ -470,7 +428,7 @@ int dirch_private(char* path){
     if (chdir(path) != 0) {
         int err = errno;
         perror("dirch_private");
-        fflush(stderr); 
+        fflush(stdout); 
         return err;
         
     }
@@ -495,7 +453,7 @@ int mydirwd() { // 13
         } else {
             int err = errno;
             perror("getcwd() error");
-            fflush(stderr); 
+            fflush(stdout); 
             return err;
              
         }
@@ -507,7 +465,7 @@ int mydirwd() { // 13
         } else {
             int err = errno;
             perror("getcwd() error");
-            fflush(stderr); 
+            fflush(stdout); 
             return err;
               
         }
@@ -529,7 +487,7 @@ int mydirmk() { // 14
         } else {
             int err = errno;
             perror("dirmk");
-            fflush(stderr); 
+            fflush(stdout); 
             return err;
               
         }
@@ -551,7 +509,7 @@ int mydirrm() { // 15
         } else { 
             int err = errno;
             perror("dirrm");
-            fflush(stderr); 
+            fflush(stdout); 
             return err;
               
         }
@@ -567,11 +525,11 @@ int mydirls() { // 16
     if(tokenCount >= 2) {
         if(getcwd(cwd, sizeof(cwd)) == NULL){
             perror("getcwd"); 
-            fflush(stderr); 
+            fflush(stdout); 
             return errno;
           
         }
-        if(strcpy(path + 2, tokens[1]) == NULL) { perror("strcpy"); fflush(stderr);  return errno;   }
+        if(strcpy(path + 2, tokens[1]) == NULL) { perror("strcpy"); fflush(stdout);  return errno;   }
         int succ = dirch_private(path);
         if(succ != 0) {
             return succ;
@@ -613,270 +571,6 @@ int mydirls() { // 16
     
 }  
 
-int myrename() {
-    if (tokenCount != 3) {
-        printf("wrong number of arguments\n");
-        fflush(stdout);
-        return 1;
-    }
-
-    if (rename(tokens[1] , tokens[2]) != 0) {
-        int err = errno;
-        perror("rename");
-        fflush(stderr); 
-        return err;
-    }
-
-    if(debug_level >= 2) {
-        printf("rename succesful\n");
-        fflush(stdout);
-    }
-
-
-    return 0;
-}
-
-int myunlink() {
-    if (tokenCount != 2) {
-        printf("wrong number of arguments\n");
-        fflush(stdout);
-        return 1;
-    }
-
-    if(unlink(tokens[1]) == -1){
-        int err = errno;
-        perror("unlink");
-        fflush(stderr);
-        return err;
-    }
-
-    if(debug_level >= 2) {
-        printf("unlink succesful\n");
-        fflush(stdout);
-    }
-
-    return 0;
-}
-
-int myremove() {
-    if (tokenCount != 2) {
-        printf("wrong number of arguments\n");
-        fflush(stdout);
-        return 1;
-    }
-
-    if(unlink(tokens[1]) == -1){
-        int err = errno;
-        perror("remove");
-        fflush(stderr);
-        return err;
-    }
-
-    if(debug_level >= 2) {
-        printf("remove succesful\n");
-        fflush(stdout);
-    }
-
-    return 0;
-}
-
-int mylinkhard() {
-    if (tokenCount != 3) {
-        printf("wrong number of arguments\n");
-        fflush(stdout);
-        return 1;
-    }
-
-    if (link(tokens[1], tokens[2]) == -1) {
-        int err = errno;
-        perror("linkhard");
-        fflush(stderr);
-        return err;
-    }
-
-    if(debug_level >= 2) {
-        printf("linkhard succesful\n");
-        fflush(stdout);
-    }
-
-    return 0;
-}
-
-int mylinksoft() {
-    if (tokenCount != 3) {
-        printf("wrong number of arguments\n");
-        fflush(stdout);
-        return 1;
-    }
-
-    if (symlink(tokens[1], tokens[2]) == -1) {
-        int err = errno;
-        perror("linksoft");
-        fflush(stderr);
-        return err;
-    }
-
-    if(debug_level >= 2) {
-        printf("linksoft succesful\n");
-        fflush(stdout);
-    }
-
-    return 0;
-}
-
-int mylinkread() {
-    if (tokenCount != 2) {
-        printf("wrong number of arguments\n");
-        fflush(stdout);
-        return 1;
-    }
-
-    char path[1024];
-
-    int len;
-    if ((len = readlink(tokens[1], path, sizeof(path) -1)) == -1) {
-        int err = errno;
-        perror("readlink");
-        fflush(stderr);
-        return err;
-    }
-    path[len] = '\0';
-
-    if(debug_level >= 2) {
-        printf("readlink succesful\n");
-        fflush(stdout);
-    }
-
-    printf("%s\n", path);
-
-    return 0;
-}
-
-int mylinklist() {
-    if(tokenCount != 2) {
-        printf("wrong number of arguments\n");
-        fflush(stdout);
-        return 1;
-    }
-
-    DIR *dir = opendir(".");  
-    if (dir == NULL) {
-        int err = errno;
-        perror("opendir");
-        return err;
-    }
-
-    struct stat target_stat;
-    if (stat(tokens[1], &target_stat) == -1) {  // Pridobi informacije o ciljni datoteki
-        int err = errno;
-        perror("stat");
-        closedir(dir);
-        return err;
-    }
-
-    ino_t target_inode = target_stat.st_ino;  // Inode ciljne datoteke
-    int first = 1;  // Spremenljivka za formatiranje izpisa (za ločitev z dvema presledkoma)
-
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
-        // Preskoči . in ..
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            continue;
-        }
-
-        struct stat statbuf;
-        if (stat(entry->d_name, &statbuf) == -1) {  // Pridobi informacije o datoteki v imeniku
-            perror("stat");
-            continue;
-        }
-
-        // Preveri, če se inode ujema z inode ciljne datoteke
-        if (statbuf.st_ino == target_inode) {
-            if (!first) {
-                printf("  ");  // Izpisi dva presledka med povezavami
-            }
-            printf("%s", entry->d_name);  // Izpisi ime datoteke
-            first = 0;  // Po prvem izpisu omogoči ločevanje z dvema presledkoma
-        }
-    }
-
-    printf("\n");  // Nova vrstica po izpisu vseh trdnih povezav
-    closedir(dir);  // Zapri imenik
-    return 0;
-}
-
-int mycpcat() {
-    if(tokenCount > 3) {
-        printf("wrong number of arguments\n");
-        fflush(stdout);
-        return 1;
-    }
-
-    int sourceFD, destFD;
-    char buffer[1024];
-    ssize_t bytesRead, bytesWritten;
-
-    sourceFD = open(tokens[1], O_RDONLY);
-    if (sourceFD == -1) {
-        int err = errno;
-        perror("Error opening source file");
-        fflush(stderr);
-        return err;
-    }
-
-    if(tokenCount == 2) {
-        destFD = 1;
-
-    } else if (tokenCount == 3) {
-        destFD = open(tokens[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if (destFD == -1) {
-            int err = errno;
-            perror("Error opening destination file");
-            fflush(stderr);
-            close(sourceFD); // Close the source file before exiting
-            return err;
-        }
-    }
-
-
-    // Copy data from source to destination
-    while ((bytesRead = read(sourceFD, buffer, sizeof(buffer))) > 0) {
-        bytesWritten = write(1, buffer, bytesRead); // to stdout
-        if (bytesWritten == -1) {
-            int err = errno;
-            perror("Error writing to destination file");
-            fflush(stderr);
-            close(sourceFD);
-            close(destFD);
-            return err;
-        }
-
-        if (tokenCount == 3) {
-            bytesWritten = write(destFD, buffer, bytesRead); // to destination file
-            if (bytesWritten == -1) {
-                int err = errno;
-                perror("Error writing to destination file");
-                fflush(stderr);
-                close(sourceFD);
-                close(destFD);
-                return err;
-            }
-        }
-    }
-
-    if (bytesRead == -1) {
-        int err = errno;
-        perror("Error reading source file");
-        fflush(stderr);
-        return err;
-    }
-
-    // Close both files
-    close(sourceFD);
-    close(destFD);
-
-    return 0;
-}
 
 
 
