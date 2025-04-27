@@ -134,6 +134,13 @@ int tokenize() {
     return 0;
 }
 
+void printTokens() {
+    for (int i = 0; i < tokenCount; i++) {
+        printf("%s ", tokens[i]);
+    }
+    printf("\n");
+}
+
 ///////////////////////////////////////////////////////////////////////
 // iskanje in klicanje ukazov
 
@@ -806,6 +813,8 @@ int mylinklist() {
 }
 
 int mycpcat() {
+
+
     if(tokenCount > 3) {
         printf("wrong number of arguments\n");
         fflush(stdout);
@@ -816,10 +825,15 @@ int mycpcat() {
     char buffer[1024];
     ssize_t bytesRead, bytesWritten;
 
-    sourceFD = open(tokens[1], O_RDONLY);
+    if(tokenCount == 1 || strcmp(tokens[1], "-") == 0) {
+        sourceFD = 0;
+    } else {
+        sourceFD = open(tokens[1], O_RDONLY);
+    }
+
     if (sourceFD == -1) {
         int err = errno;
-        perror("Error opening source file");
+        perror("cpcat");
         fflush(stderr);
         return err;
     }
@@ -831,7 +845,7 @@ int mycpcat() {
         destFD = open(tokens[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (destFD == -1) {
             int err = errno;
-            perror("Error opening destination file");
+            perror("open");
             fflush(stderr);
             close(sourceFD); // Close the source file before exiting
             return err;
@@ -839,23 +853,24 @@ int mycpcat() {
     }
 
 
-    // Copy data from source to destination
     while ((bytesRead = read(sourceFD, buffer, sizeof(buffer))) > 0) {
-        bytesWritten = write(1, buffer, bytesRead); // to stdout
-        if (bytesWritten == -1) {
-            int err = errno;
-            perror("Error writing to destination file");
-            fflush(stderr);
-            close(sourceFD);
-            close(destFD);
-            return err;
+        if(tokenCount == 2) {
+            bytesWritten = write(1, buffer, bytesRead); // to stdout
+            if (bytesWritten == -1) {
+                int err = errno;
+                perror("write");
+                fflush(stderr);
+                close(sourceFD);
+                close(destFD);
+                return err;
+            }
         }
 
         if (tokenCount == 3) {
             bytesWritten = write(destFD, buffer, bytesRead); // to destination file
             if (bytesWritten == -1) {
                 int err = errno;
-                perror("Error writing to destination file");
+                perror("write");
                 fflush(stderr);
                 close(sourceFD);
                 close(destFD);
@@ -866,15 +881,14 @@ int mycpcat() {
 
     if (bytesRead == -1) {
         int err = errno;
-        perror("Error reading source file");
+        perror("read");
         fflush(stderr);
         return err;
     }
 
     // Close both files
-    close(sourceFD);
-    close(destFD);
-
+    if(sourceFD != 0) {close(sourceFD);}
+    if(destFD != 1)   {close(destFD);}
     return 0;
 }
 
