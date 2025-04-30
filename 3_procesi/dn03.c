@@ -128,7 +128,7 @@ int tokenize() {
             bgRun = 1; 
             stRedir++;;
             redirects[2][0] = '&';
-            redirects[2][0] = '\0';
+            redirects[2][1] = '\0';
         }
     }
     stArg = tokenCount - 1 - stRedir;
@@ -138,7 +138,7 @@ int tokenize() {
     for(int ii = 1; ii <= stArg; ii++) {
         strcpy(ukaz_brez_redir[ii], tokens[ii]);
     }
-     
+    
     return 0;
 }
 
@@ -149,6 +149,13 @@ void printTokens() {
     printf("\n");
 }
 
+void tokensToArgs() {
+    // args[1] je pointer na prvi znak v tokens[i]
+    for (int i = 0; i < tokenCount - stRedir; i++) {
+        args[i] = tokens[i];  
+    }
+    args[tokenCount] = NULL;  // Null-terminate ker to rabi execv
+}
 
 ///////////////////////////////////////////////////////////////////////
 // iskanje in klicanje ukazov
@@ -194,6 +201,9 @@ int mysysinfo();    // 31
 int myproc();       // 32
 int mypids();       // 33
 int mypinfo();      // 34
+int mysleep();      // 35
+int mywaitone();    // 36
+int mywaitall();    // 37
 
 
 BuiltinCmd builtins[] = {
@@ -231,8 +241,10 @@ BuiltinCmd builtins[] = {
     { "sysinfo",    mysysinfo},   // 31
     { "proc",       myproc},      // 32
     { "pids",       mypids},      // 33
-    { "pinfo",      mypinfo}      // 34
-
+    { "pinfo",      mypinfo},     // 34
+    { "sleep",      mysleep},     // 35
+    { "waitone",    mywaitone},   // 36
+    { "waitall",    mywaitall}    // 37
 };
 
 
@@ -254,6 +266,7 @@ int execute_builtin(int index) {
     }
     return -1; // or error
 }
+
 
 //////////////////////////////////////////////////////////////////////////
 // COMMAND FUNCTIONS
@@ -293,9 +306,9 @@ int myhelp() {
 int debug_level = 0; // global var sa si zaponi zadnji level
 int mydebug() { // 1
     // >debug level (0/1 arg)
-    if (tokenCount == 1) {printf("%d\n", debug_level); fflush(stdout);}
+    if (tokenCount - stRedir == 1) {printf("%d\n", debug_level); fflush(stdout);}
     int level = -1;
-    if(tokenCount >= 2) {
+    if(tokenCount - stRedir >= 2) {
         level = atoi(tokens[1]);
     }
     if(level > -1) {debug_level = level;} //level == -1 ce arg ni podan
@@ -334,9 +347,9 @@ int printDebug() { //pomozna funkcija
 
 int myprompt() { // 2
     // >prompt name (0/1 arg)
-    if(tokenCount == 1) {
+    if(tokenCount - stRedir == 1) {
         printf("%s\n", promptName);fflush(stdout);   
-    } else if (tokenCount >= 2) {
+    } else if (tokenCount - stRedir >= 2) {
         if(strlen(tokens[1]) <= 8) {
             strcpy(promptName, tokens[1]);
         } else {
@@ -355,9 +368,9 @@ int mystatus() { // 3
 
 int myexit(){ // 4
     // >exit status (0/1 arg)
-    if(tokenCount == 1) {
+    if(tokenCount - stRedir == 1) {
         exit(lastCmdExitStatus);
-    } else if (tokenCount >= 2) {
+    } else if (tokenCount - stRedir == 2) {
         int s = atoi(tokens[1]);
         exit(s);
     }
@@ -365,14 +378,14 @@ int myexit(){ // 4
 
 int myprint(){ // 5
     for(int i = 1; i < tokenCount; i++){
-        if(i == tokenCount -1) { printf("%s", tokens[i]); }   
+        if(i == tokenCount-1) { printf("%s", tokens[i]); }   
         else {printf("%s ", tokens[i]);}
     }   fflush(stdout);   
     return 0;
 }
 
 int myecho(){ // 6
-    if(tokenCount == 1) {printf("\n");}
+    if(tokenCount - stRedir == 1) {printf("\n");}
     for(int i = 1; i < tokenCount; i++){
         if(i == tokenCount -1) { printf("%s\n", tokens[i]); }
         else {printf("%s ", tokens[i]);}
@@ -404,7 +417,7 @@ int mysum(){  // 8
 } 
 
 int mycalc(){  // 9
-    if(tokenCount != 4) {
+    if(tokenCount - stRedir != 4) {
         printf("invalid command\n");
         return 1; // nedovoljeno stevilo ukazov
     }
@@ -433,7 +446,7 @@ int mycalc(){  // 9
 } 
 /////////////////  imeniki & datoteke  ////////////////////
 int mybasename(){  // 10
-    if(tokenCount != 2) {
+    if(tokenCount - stRedir != 2) {
         return 1;
     }
     char* path = tokens[1];
@@ -445,7 +458,7 @@ int mybasename(){  // 10
 } 
 
 int mydirname(){  // 11
-    if(tokenCount != 2) {
+    if(tokenCount - stRedir != 2) {
         return 1;
     }
     char path[MAX_TOKEN_LEN];
@@ -474,7 +487,7 @@ int mydirch() {
         printf("before: %s\n", cwd); 
     }
 
-    if (tokenCount == 1) {
+    if (tokenCount - stRedir == 1) {
         if (chdir("/") != 0) {
             int err = errno;
             perror("dirch");
@@ -490,7 +503,7 @@ int mydirch() {
             perror("dirch");
             fflush(stderr); 
             return err;
-               
+            
         }
     }
 
@@ -514,7 +527,7 @@ int dirch_private(char* path){
 
 int mydirwd() { // 13
     char* mode;
-    if (tokenCount == 1) { mode = "base";}
+    if (tokenCount - stRedir == 1) { mode = "base";}
     else                 { mode = tokens[1]; }
     
     char cwd[1024];
@@ -533,7 +546,7 @@ int mydirwd() { // 13
             perror("getcwd() error");
             fflush(stderr); 
             return err;
-             
+            
         }
 
     } else if(!strcmp(mode, "full")) {
@@ -545,7 +558,7 @@ int mydirwd() { // 13
             perror("getcwd() error");
             fflush(stderr); 
             return err;
-              
+            
         }
     }
     return 0;
@@ -553,11 +566,11 @@ int mydirwd() { // 13
 } 
 
 int mydirmk() { // 14
-    if(tokenCount != 2) {
+    if(tokenCount - stRedir != 2) {
         printf("invalid command");
         fflush(stdout); 
         return 1;
-         
+        
     } else {
         char* dirname = tokens[1];
         if (mkdir(dirname, 0755) == 0) {
@@ -567,18 +580,18 @@ int mydirmk() { // 14
             perror("dirmk");
             fflush(stderr); 
             return err;
-              
+            
         }
     }
     return 0;
 }  
 
 int mydirrm() { // 15
-    if(tokenCount != 2) {
+    if(tokenCount - stRedir!= 2) {
         printf("invalid command");
         fflush(stdout); 
         return 1;
-         
+        
     } else {
         char* dirname = tokens[1];
         //printf("Trying to remove: '%s'\n", dirname); fflush(stdout);
@@ -589,7 +602,7 @@ int mydirrm() { // 15
             perror("dirrm");
             fflush(stderr); 
             return err;
-              
+            
         }
     }
     return 0;
@@ -600,12 +613,12 @@ int mydirls() { // 16
     char cwd[1024];
     
 
-    if(tokenCount >= 2) {
+    if(tokenCount - stRedir >= 2) {
         if(getcwd(cwd, sizeof(cwd)) == NULL){
             perror("getcwd"); 
             fflush(stderr); 
             return errno;
-          
+        
         }
         if(strcpy(path + 2, tokens[1]) == NULL) { perror("strcpy"); fflush(stderr);  return errno;   }
         int succ = dirch_private(path);
@@ -642,7 +655,7 @@ int mydirls() { // 16
     closedir(dir);
 
     // Go back to original directory
-    if (tokenCount >= 2) {
+    if (tokenCount - stRedir >= 2) {
         int s = dirch_private(cwd); // move back
         if (s != 0) return s;
     }
@@ -652,7 +665,7 @@ int mydirls() { // 16
 }  
 
 int myrename() {
-    if (tokenCount != 3) {
+    if (tokenCount - stRedir!= 3) {
         printf("wrong number of arguments\n");
         fflush(stdout);
         return 1;
@@ -675,7 +688,7 @@ int myrename() {
 }
 
 int myunlink() {
-    if (tokenCount != 2) {
+    if (tokenCount - stRedir != 2) {
         printf("wrong number of arguments\n");
         fflush(stdout);
         return 1;
@@ -697,7 +710,7 @@ int myunlink() {
 }
 
 int myremove() {
-    if (tokenCount != 2) {
+    if (tokenCount  - stRedir != 2) {
         printf("wrong number of arguments\n");
         fflush(stdout);
         return 1;
@@ -719,7 +732,7 @@ int myremove() {
 }
 
 int mylinkhard() {
-    if (tokenCount != 3) {
+    if (tokenCount - stRedir != 3) {
         printf("wrong number of arguments\n");
         fflush(stdout);
         return 1;
@@ -741,7 +754,7 @@ int mylinkhard() {
 }
 
 int mylinksoft() {
-    if (tokenCount != 3) {
+    if (tokenCount - stRedir != 3) {
         printf("wrong number of arguments\n");
         fflush(stdout);
         return 1;
@@ -763,7 +776,7 @@ int mylinksoft() {
 }
 
 int mylinkread() {
-    if (tokenCount != 2) {
+    if (tokenCount - stRedir != 2) {
         printf("wrong number of arguments\n");
         fflush(stdout);
         return 1;
@@ -791,7 +804,7 @@ int mylinkread() {
 }
 
 int mylinklist() {
-    if(tokenCount != 2) {
+    if(tokenCount - stRedir != 2) {
         printf("wrong number of arguments\n");
         fflush(stdout);
         return 1;
@@ -846,7 +859,7 @@ int mylinklist() {
 int mycpcat() {
 
 
-    if(tokenCount > 3) {
+    if(tokenCount - stRedir > 3) {
         printf("wrong number of arguments\n");
         fflush(stdout);
         return 1;
@@ -856,7 +869,7 @@ int mycpcat() {
     char buffer[1024];
     ssize_t bytesRead, bytesWritten;
 
-    if(tokenCount == 1 || strcmp(tokens[1], "-") == 0) {
+    if(tokenCount - stRedir == 1 || strcmp(tokens[1], "-") == 0) {
         sourceFD = 0;
     } else {
         sourceFD = open(tokens[1], O_RDONLY);
@@ -869,10 +882,10 @@ int mycpcat() {
         return err;
     }
 
-    if(tokenCount == 2) {
+    if(tokenCount - stRedir == 2) {
         destFD = 1;
 
-    } else if (tokenCount == 3) {
+    } else if (tokenCount - stRedir == 3) {
         destFD = open(tokens[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (destFD == -1) {
             int err = errno;
@@ -885,7 +898,7 @@ int mycpcat() {
 
 
     while ((bytesRead = read(sourceFD, buffer, sizeof(buffer))) > 0) {
-        if(tokenCount == 2) {
+        if(tokenCount - stRedir == 2) {
             bytesWritten = write(1, buffer, bytesRead); // to stdout
             if (bytesWritten == -1) {
                 int err = errno;
@@ -897,7 +910,7 @@ int mycpcat() {
             }
         }
 
-        if (tokenCount == 3) {
+        if (tokenCount - stRedir == 3) {
             bytesWritten = write(destFD, buffer, bytesRead); // to destination file
             if (bytesWritten == -1) {
                 int err = errno;
@@ -982,15 +995,15 @@ int mysysinfo(){ // 31
 
 int myproc() { // 32
 
-    if(tokenCount >= 3) {
+    if(tokenCount - stRedir >= 3) {
         printf("wrong number of arguments\n");
         fflush(stdout);
         return 1;
-    } else if(tokenCount == 1 ) {
+    } else if(tokenCount - stRedir == 1 ) {
         printf("%s\n", procfs_path);
         fflush(stdout);
         return 0;
-    } else if (tokenCount == 2) {
+    } else if (tokenCount - stRedir == 2) {
         if(access(tokens[1], F_OK|R_OK) != 0) {
             if (debug_level >= 2) {
                 printf("invalid path - access");
@@ -1179,14 +1192,92 @@ int mypinfo() { // 34
     return 0;
 } 
 
+int mysleep() { // xx
+    int time = 5;
+    if(tokenCount - stRedir >= 2 && isInt(tokens[1])) {
+        time = atoi(tokens[1]);
+    }
+    sleep(time);
+    return 0;
+} 
+
+int mywaitone() { // xx
+    int s;
+    int pid = -1;
+
+    if (tokenCount - stRedir == 2 && isInt(tokens[1])) {
+        pid = atoi(tokens[1]);
+        
+    } else if (tokenCount - stRedir >= 3) {
+        printf("invalid number of args");
+        return 1;
+    }
+
+    if(waitpid(pid, &s, 0) == -1) { // ni otrok
+        return 0;
+
+    } else if (WIFEXITED(s)){
+        return WEXITSTATUS(s);
+    }
+} 
+
+int mywaitall() {
+    while (1) {
+        int pid;
+        int status;
+        pid = waitpid(-1, &status, 0); // -1 waits for any child
+
+        if (pid == -1) {
+            if (errno == ECHILD) {
+                break;  // No more children
+            } else {
+                perror("waitpid");
+                break;  // Exit on error
+            }
+        } 
+    }
+
+    return 0;
+}
+
 // int my() { // xx
     
 // } 
 
+//////////////////////////////////////////////////////////////////
+
+// SIGCHILD SUPPORT
+void handle_sigchld(int sig) {
+    // Reap all terminated children
+    int pid, status, serrno;
+    serrno = errno;
+    while (1)
+        {
+        pid = waitpid (WAIT_ANY, &status, WNOHANG);
+        if (pid < 0)
+            {
+            //perror ("waitpid");
+            // no more children, all reaped
+            break;
+            }
+        if (pid == 0)
+            // no child ready to be reaped
+            break;
+        
+        }
+    errno = serrno;
+}
 
 /////////////////////////////////////////////////////////////////////////////
 int main() {
+    //for SIGCHILD - zombie processes
+    struct sigaction sa;
+    sa.sa_handler = &handle_sigchld;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;  // avoid interrupting I/O, ignore stopped children
+    sigaction(SIGCHLD, &sa, NULL);
     int end = 0;
+
     while(!end) {
         if(isatty(STDIN_FILENO)){
             printf("%s> ", promptName);
@@ -1201,48 +1292,50 @@ int main() {
         
         int succ = tokenize();
         stUkaza = find_builtin();
-        printDebug();// se izvede le ce je debug_level > 0
+        printDebug(); // se izvede le ce je debug_level > 0
         
-        if(stUkaza != -1) { 
-            if(! bgRun) {
+        if(stUkaza != -1) { //builtins
+            if (!bgRun) {
                 lastCmdExitStatus = execute_builtin(stUkaza);
             } else {
-            //     fflush(stdin);
-            //     int pid = fork();
+                fflush(stdin);
+                pid_t pid = fork();
+                if (pid == 0) {
+                    // child runs the builtin in background
+                    int s = execute_builtin(stUkaza);
+                    exit(s);
+                } else if (pid > 0) {
+                    // parent does not wait for child in bgRun
 
-            // }
+                } else {
+                    perror("fork");
+                    fflush(stderr);
+                }
+            }
             
 
         } else {
             // external command
             fflush(stdin);
-            int pid = fork();
-            if(pid > 0) { // stars
-                int statusOtroka = -1;
-                if( ! bgRun )  {
-                    waitpid(pid, &statusOtroka, 0);
-                    if(WIFEXITED(statusOtroka)) {
-                        lastCmdExitStatus = WEXITSTATUS(statusOtroka);
+            pid_t pid = fork();
+            if(pid > 0) {  // stars
+                if (!bgRun) {  // pocakaj ce v ospredju
+                    int status = -1;
+                    waitpid(pid, &status, 0);
+                    if(WIFEXITED(status)) {
+                        lastCmdExitStatus = WEXITSTATUS(status);
                     }
-                } else { //in background
-
+                } else {  // Background - ne cakas
+                    
                 }
 
-            } else if (pid == 0) { // otrok
-                //tokens to args ->
-                //args[i] point to the first char in token[i]
-                for (int i = 0; i < tokenCount; ++i) {
-                    args[i] = tokens[i];  
-                }
-                args[tokenCount] = NULL;  // Null-terminate ker to rabi execv
-
-                //             exe        args 
+            } else if (pid == 0) {  // Child process
+                tokensToArgs();
                 int e = execvp(args[0], args);
-                //           p - uposteva $PATH
                 if(e == -1) {
                     perror("exec");
                     fflush(stderr);
-                    exit(127); // treba je exitat otroka!!!
+                    exit(127);  // Child exits if exec fails
                 }
                 exit(0);
 
@@ -1252,6 +1345,7 @@ int main() {
                 fflush(stderr);
                 return 1;
             }
+            fflush(stdout);
         }
 
         // reset for new command
