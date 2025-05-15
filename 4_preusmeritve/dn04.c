@@ -377,8 +377,8 @@ int myexit(){ // 4
 }
 
 int myprint(){ // 5
-    for(int i = 1; i < tokenCount; i++){
-        if(i == tokenCount-1) { printf("%s", tokens[i]); }   
+    for(int i = 1; i < tokenCount - stRedir; i++){
+        if(i == tokenCount - 1 - stRedir) { printf("%s", tokens[i]); }   
         else {printf("%s ", tokens[i]);}
     }   fflush(stdout);   
     return 0;
@@ -386,8 +386,8 @@ int myprint(){ // 5
 
 int myecho(){ // 6
     if(tokenCount - stRedir == 1) {printf("\n");}
-    for(int i = 1; i < tokenCount; i++){
-        if(i == tokenCount -1) { printf("%s\n", tokens[i]); }
+    for(int i = 1; i < tokenCount - stRedir; i++){
+        if(i == tokenCount -1 - stRedir) { printf("%s\n", tokens[i]); }
         else {printf("%s ", tokens[i]);}
     }   fflush(stdout);   
     return 0;
@@ -395,7 +395,7 @@ int myecho(){ // 6
 
 int mylen() {  // 7
     int vsota = 0;
-    for(int i = 1; i < tokenCount; i++){
+    for(int i = 1; i < tokenCount - stRedir; i++){
         vsota += strlen(tokens[i]);
     }
     printf("%d\n", vsota); fflush(stdout);   
@@ -408,7 +408,7 @@ int mysum(){  // 8
         return 1;
     }
     int vsota = 0;
-    for(int i = 1; i < tokenCount; i++){
+    for(int i = 1; i < tokenCount - stRedir; i++){
         vsota += atoi(tokens[i]);
     }
     printf("%d\n", vsota);
@@ -858,7 +858,6 @@ int mylinklist() {
 
 int mycpcat() {
 
-
     if(tokenCount - stRedir > 3) {
         printf("wrong number of arguments\n");
         fflush(stdout);
@@ -882,7 +881,7 @@ int mycpcat() {
         return err;
     }
 
-    if(tokenCount - stRedir == 2) {
+    if(tokenCount - stRedir == 2 || tokenCount - stRedir == 1) {
         destFD = 1;
 
     } else if (tokenCount - stRedir == 3) {
@@ -898,8 +897,8 @@ int mycpcat() {
 
 
     while ((bytesRead = read(sourceFD, buffer, sizeof(buffer))) > 0) {
-        if(tokenCount - stRedir == 2) {
-            bytesWritten = write(1, buffer, bytesRead); // to stdout
+        // if(tokenCount - stRedir == 2 || tokenCount - stRedir == 1) {
+            bytesWritten = write(destFD, buffer, bytesRead); // to stdout
             if (bytesWritten == -1) {
                 int err = errno;
                 perror("write");
@@ -908,19 +907,19 @@ int mycpcat() {
                 close(destFD);
                 return err;
             }
-        }
+        // }
 
-        if (tokenCount - stRedir == 3) {
-            bytesWritten = write(destFD, buffer, bytesRead); // to destination file
-            if (bytesWritten == -1) {
-                int err = errno;
-                perror("write");
-                fflush(stderr);
-                close(sourceFD);
-                close(destFD);
-                return err;
-            }
-        }
+        // if (tokenCount - stRedir == 3) {
+        //     bytesWritten = write(destFD, buffer, bytesRead); // to destination file
+        //     if (bytesWritten == -1) {
+        //         int err = errno;
+        //         perror("write");
+        //         fflush(stderr);
+        //         close(sourceFD);
+        //         close(destFD);
+        //         return err;
+        //     }
+        // }
     }
 
     if (bytesRead == -1) {
@@ -1294,14 +1293,75 @@ int main() {
         stUkaza = find_builtin();
         printDebug(); // se izvede le ce je debug_level > 0
         
-        if(stUkaza != -1) { //builtins
+        if(stUkaza != -1) { 
+            //builtin command
             if (!bgRun) {
+                // important to save stdin and stout fd 
+                int save_stdin = dup(0);   // original stdin
+                int save_stdout = dup(1); // original stout
+
+                // redirects
+                fflush(stdout);
+                if (inRedirect) {
+                    int irfd = -1;
+                    if( (irfd = open(redirects[0], O_RDONLY)) == -1) {
+                        int err = errno;
+                        perror("open");
+                        fflush(stderr);
+                        exit(err);  
+                    }
+                    dup2(irfd, 0);
+                    close(irfd);
+                }
+                if(outRedirect) {
+                    int irfd = -1;
+                    if( (irfd = open(redirects[1], O_WRONLY | O_CREAT | O_TRUNC, 0644)) == -1) {
+                        int err = errno;
+                        perror("open");
+                        fflush(stderr);
+                        exit(err);  
+                    }
+                    dup2(irfd, 1);
+                    close(irfd);
+                }
+
                 lastCmdExitStatus = execute_builtin(stUkaza);
+
+                fflush(stdout);
+                dup2(save_stdin, 0);
+                dup2(save_stdout, 1);
+
             } else {
+                // background run
                 fflush(stdin);
                 pid_t pid = fork();
                 if (pid == 0) {
                     // child runs the builtin in background
+
+                    //redirects
+                    fflush(stdout);
+                    if (inRedirect) {
+                        int irfd = -1;
+                        if( (irfd = open(redirects[0], O_RDONLY)) == -1) {
+                            int err = errno;
+                            perror("open");
+                            fflush(stderr);
+                            exit(err);  
+                        }
+                        dup2(irfd, 0);
+                        close(irfd);
+                    }
+                    if(outRedirect) {
+                        int irfd = -1;
+                        if( (irfd = open(redirects[1], O_WRONLY | O_CREAT | O_TRUNC, 0644)) == -1) {
+                            int err = errno;
+                            perror("open");
+                            fflush(stderr);
+                            exit(err);  
+                        }
+                        dup2(irfd, 1);
+                        close(irfd);
+                    }
                     int s = execute_builtin(stUkaza);
                     exit(s);
                 } else if (pid > 0) {
@@ -1330,6 +1390,32 @@ int main() {
                 }
 
             } else if (pid == 0) {  // Child process
+                //redirects
+                fflush(stdout);
+                if (inRedirect) {
+                    int irfd = -1;
+                    if( (irfd = open(redirects[0], O_RDONLY)) == -1) {
+                        int err = errno;
+                        perror("open");
+                        fflush(stderr);
+                        exit(err);  
+                    }
+                    dup2(irfd, 0);
+                    close(irfd);
+                }
+                if(outRedirect) {
+                    int irfd = -1;
+                    if( (irfd = open(redirects[1], O_WRONLY | O_CREAT | O_TRUNC, 0644)) == -1) {
+                        int err = errno;
+                        perror("open");
+                        fflush(stderr);
+                        exit(err);  
+                    }
+                    dup2(irfd, 1);
+                    close(irfd);
+                }
+                
+
                 tokensToArgs();
                 int e = execvp(args[0], args);
                 if(e == -1) {
